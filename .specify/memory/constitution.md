@@ -1,50 +1,45 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report:
+- Version change: 0.0.0 -> 1.0.0 (Initial Ratification)
+- Modified principles: Defined all core principles for Labyrinth Game.
+- Added sections: Technology Standards, Development Workflow.
+- Templates requiring updates: None (Initial setup).
+-->
+
+# Labyrinth Game Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Offline-First (NON-NEGOTIABLE)
+The game MUST be fully playable without an internet connection. All static assets (images, sounds, code) MUST be cached via Service Worker on the first load. Network dependency for core gameplay is strictly prohibited.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Simplicity & Lightweight
+We prioritize native Web APIs (Canvas, localStorage) over heavy frameworks. No external game engines (like Phaser) unless justified by complexity that cannot be handled natively. The initial bundle size SHOULD remain under 5MB.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Performance (60 FPS)
+The game loop MUST maintain a steady 60 frames per second on target devices. Game logic (updates) MUST be decoupled from rendering (draw calls) to ensure smooth performance. Memory leaks must be aggressively prevented.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Testable Logic
+Core game logic (movement, collision detection, scoring, state management) MUST be implemented as testable units (pure functions or decoupled classes) verified by automated tests (Vitest). Rendering code is exempt from unit testing but requires manual verification.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Responsive Design
+The game interface and canvas MUST adapt to different screen sizes and aspect ratios. While primary input is keyboard (Arrow Keys), the UI layout MUST NOT break on smaller screens.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+## Technology Standards
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+- **Language**: HTML5, CSS3, Modern JavaScript (ES6+).
+- **Testing**: Vitest for unit testing game logic.
+- **Storage**: `localStorage` for persisting user progress (stars, unlocks).
+- **Architecture**: Single Page Application (SPA) structure; PWA compliant (Manifest + Service Worker).
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+## Development Workflow
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+- **Process**: Spec -> Plan -> Tasks -> Implementation. No code is written without a defined task.
+- **Quality Gates**: All functional requirements must be met. Automated tests must pass for logic changes.
+- **Documentation**: Specs and Plans must be kept in sync with implementation decisions.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This Constitution supersedes all other project documentation. Amendments require a Pull Request with a clear rationale and impact analysis.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2025-11-20 | **Last Amended**: 2025-11-20

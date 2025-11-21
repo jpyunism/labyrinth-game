@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Game Levels</title>
+    <link rel="manifest" href="/manifest.json">
+</head>
+<body>
+    <div id="app">
+        <canvas id="game-canvas"></canvas>
+        <div id="ui-layer">
+            <div id="level-select-screen"></div>
+            <div id="game-hud" class="hidden">
+                <div id="game-ui">
+                    <span id="level-display">Level: 1</span>
+                    <span id="timer-display">Time: 00:00</span>
+                </div>
+                <button id="back-btn">Back to Menu</button>
+            </div>
+            <div id="modal-overlay" class="hidden">
+                <div id="victory-modal" class="modal hidden">
+                    <h2>Level Complete!</h2>
+                    <div class="stars-display"></div>
+                    <p>Time: <span class="time-result"></span></p>
+                    <button id="next-level-btn">Next Level</button>
+                    <button id="menu-btn">Menu</button>
+                </div>
+                <div id="game-over-modal" class="modal hidden">
+                    <h2>Game Over</h2>
+                    <p>Try again!</p>
+                    <button id="retry-btn">Retry</button>
+                    <button id="menu-btn-fail">Menu</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="/src/js/main.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch(registrationError => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
