@@ -1,6 +1,103 @@
 import { SettingsStore } from "../state/settings.js";
 import { zzfx, zzfxV, zzfxX } from "../lib/zzfx.js";
 
+// Note frequencies (Hz) for C pentatonic scale
+const NOTE = {
+  C3: 130.81,
+  D3: 146.83,
+  E3: 164.81,
+  G3: 196.0,
+  A3: 220.0,
+  C4: 261.63,
+  D4: 293.66,
+  E4: 329.63,
+  G4: 392.0,
+  A4: 440.0,
+  C5: 523.25,
+  D5: 587.33,
+  E5: 659.25,
+  REST: 0,
+};
+
+/**
+ * Track definitions for procedural music.
+ * Each track has a tempo (BPM) and note sequences for lead and bass voices.
+ * A REST (0) means silence for that beat.
+ */
+const TRACKS = {
+  gameplay: {
+    tempo: 130,
+    lead: [
+      NOTE.E4,
+      NOTE.G4,
+      NOTE.A4,
+      NOTE.G4,
+      NOTE.E4,
+      NOTE.REST,
+      NOTE.D4,
+      NOTE.C4,
+      NOTE.D4,
+      NOTE.E4,
+      NOTE.G4,
+      NOTE.REST,
+      NOTE.A4,
+      NOTE.G4,
+      NOTE.E4,
+      NOTE.D4,
+      NOTE.C4,
+      NOTE.REST,
+      NOTE.D4,
+      NOTE.E4,
+      NOTE.G4,
+      NOTE.A4,
+      NOTE.C5,
+      NOTE.A4,
+      NOTE.G4,
+      NOTE.E4,
+      NOTE.D4,
+      NOTE.REST,
+      NOTE.C4,
+      NOTE.D4,
+      NOTE.E4,
+      NOTE.REST,
+    ],
+    bass: [
+      NOTE.C3,
+      NOTE.C3,
+      NOTE.REST,
+      NOTE.C3,
+      NOTE.G3,
+      NOTE.G3,
+      NOTE.REST,
+      NOTE.G3,
+      NOTE.A3,
+      NOTE.A3,
+      NOTE.REST,
+      NOTE.A3,
+      NOTE.E3,
+      NOTE.E3,
+      NOTE.REST,
+      NOTE.E3,
+      NOTE.C3,
+      NOTE.C3,
+      NOTE.REST,
+      NOTE.C3,
+      NOTE.G3,
+      NOTE.G3,
+      NOTE.REST,
+      NOTE.G3,
+      NOTE.D3,
+      NOTE.D3,
+      NOTE.REST,
+      NOTE.D3,
+      NOTE.C3,
+      NOTE.C3,
+      NOTE.REST,
+      NOTE.C3,
+    ],
+  },
+};
+
 /**
  * AudioManager - Handles all audio playback and volume control.
  * Uses the shared ZzFX AudioContext (zzfxX) for both music and SFX.
@@ -9,12 +106,22 @@ export class AudioManager {
   constructor() {
     this.audioContext = null;
     this.musicGainNode = null;
-    this.currentMusicSource = null;
-    this.musicBufferCache = new Map();
     this.settingsStore = new SettingsStore();
     this.settings = this.settingsStore.load();
     this.initialized = false;
     this.sfxDefinitions = {};
+
+    // Procedural music state
+    this.musicPlaying = false;
+    this.musicSchedulerId = null;
+    this.leadOscillator = null;
+    this.bassOscillator = null;
+    this.leadGain = null;
+    this.bassGain = null;
+    this.currentTrack = null;
+    this.nextNoteTime = 0;
+    this.leadIndex = 0;
+    this.bassIndex = 0;
   }
 
   /**
@@ -85,11 +192,10 @@ export class AudioManager {
   }
 
   /**
-   * Plays a music track.
-   * @param {string} id - The unique identifier of the music track
-   * @param {boolean} loop - Whether to loop the track (default: true)
+   * Starts procedural music playback.
+   * @param {string} trackId - The track to play (e.g. "gameplay")
    */
-  async playMusic(id, loop = true) {
+  playMusic(trackId) {
     if (!this.initialized) {
       console.warn("AudioManager not initialized");
       return;
@@ -102,33 +208,98 @@ export class AudioManager {
       return;
     }
 
+    const track = TRACKS[trackId];
+    if (!track) {
+      console.warn(`Music track "${trackId}" not found`);
+      return;
+    }
+
     try {
-      // Check cache first
-      let audioBuffer = this.musicBufferCache.get(id);
-      if (!audioBuffer) {
-        // Load from public directory (works in both dev and production)
-        const response = await fetch(`/audio/music/${id}.mp3`);
-        if (!response.ok) {
-          console.warn(`Music file "${id}.mp3" not found`);
-          return;
-        }
-        const arrayBuffer = await response.arrayBuffer();
-        audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-        this.musicBufferCache.set(id, audioBuffer);
+      this.currentTrack = track;
+      this.leadIndex = 0;
+      this.bassIndex = 0;
+
+      const beatDuration = 60 / track.tempo;
+
+      // Create lead oscillator (square wave)
+      this.leadOscillator = this.audioContext.createOscillator();
+      this.leadOscillator.type = "square";
+      this.leadGain = this.audioContext.createGain();
+      this.leadGain.gain.value = 0; // start silent
+      this.leadOscillator.connect(this.leadGain);
+      this.leadGain.connect(this.musicGainNode);
+      this.leadOscillator.start();
+
+      // Create bass oscillator (triangle wave)
+      this.bassOscillator = this.audioContext.createOscillator();
+      this.bassOscillator.type = "triangle";
+      this.bassGain = this.audioContext.createGain();
+      this.bassGain.gain.value = 0; // start silent
+      this.bassOscillator.connect(this.bassGain);
+      this.bassGain.connect(this.musicGainNode);
+      this.bassOscillator.start();
+
+      this.musicPlaying = true;
+      this.nextNoteTime = this.audioContext.currentTime;
+
+      // Look-ahead scheduler: runs every 25ms, schedules notes 100ms ahead
+      this.musicSchedulerId = setInterval(() => {
+        this._scheduleNotes(beatDuration);
+      }, 25);
+    } catch (error) {
+      console.error("Failed to start music:", error);
+    }
+  }
+
+  /**
+   * Schedules upcoming notes for the procedural music.
+   * @param {number} beatDuration - Duration of one beat in seconds
+   * @private
+   */
+  _scheduleNotes(beatDuration) {
+    if (!this.musicPlaying || !this.currentTrack) return;
+
+    const lookAhead = 0.1; // schedule 100ms into the future
+    const noteLength = beatDuration * 0.7; // note duration (70% of beat, 30% gap)
+
+    while (this.nextNoteTime < this.audioContext.currentTime + lookAhead) {
+      const track = this.currentTrack;
+
+      // Schedule lead note
+      const leadFreq = track.lead[this.leadIndex % track.lead.length];
+      if (leadFreq > 0) {
+        this.leadOscillator.frequency.setValueAtTime(
+          leadFreq,
+          this.nextNoteTime
+        );
+        this.leadGain.gain.setValueAtTime(0.15, this.nextNoteTime);
+        this.leadGain.gain.setValueAtTime(
+          0,
+          this.nextNoteTime + noteLength
+        );
+      } else {
+        this.leadGain.gain.setValueAtTime(0, this.nextNoteTime);
       }
 
-      // Create source
-      this.currentMusicSource = this.audioContext.createBufferSource();
-      this.currentMusicSource.buffer = audioBuffer;
-      this.currentMusicSource.loop = loop;
+      // Schedule bass note
+      const bassFreq = track.bass[this.bassIndex % track.bass.length];
+      if (bassFreq > 0) {
+        this.bassOscillator.frequency.setValueAtTime(
+          bassFreq,
+          this.nextNoteTime
+        );
+        this.bassGain.gain.setValueAtTime(0.2, this.nextNoteTime);
+        this.bassGain.gain.setValueAtTime(
+          0,
+          this.nextNoteTime + noteLength
+        );
+      } else {
+        this.bassGain.gain.setValueAtTime(0, this.nextNoteTime);
+      }
 
-      // Connect through gain node
-      this.currentMusicSource.connect(this.musicGainNode);
-
-      // Start playback
-      this.currentMusicSource.start(0);
-    } catch (error) {
-      console.error(`Failed to play music "${id}":`, error);
+      this.leadIndex++;
+      this.bassIndex++;
+      this.nextNoteTime += beatDuration;
     }
   }
 
@@ -137,28 +308,59 @@ export class AudioManager {
    * @param {number} fadeOutDuration - Duration in seconds to fade out (default: 0)
    */
   stopMusic(fadeOutDuration = 0) {
-    if (!this.currentMusicSource) {
+    if (!this.musicPlaying) {
       return;
     }
 
     try {
+      // Clear the scheduler
+      if (this.musicSchedulerId) {
+        clearInterval(this.musicSchedulerId);
+        this.musicSchedulerId = null;
+      }
+
+      const cleanup = () => {
+        if (this.leadOscillator) {
+          this.leadOscillator.stop();
+          this.leadOscillator.disconnect();
+          this.leadOscillator = null;
+        }
+        if (this.bassOscillator) {
+          this.bassOscillator.stop();
+          this.bassOscillator.disconnect();
+          this.bassOscillator = null;
+        }
+        if (this.leadGain) {
+          this.leadGain.disconnect();
+          this.leadGain = null;
+        }
+        if (this.bassGain) {
+          this.bassGain.disconnect();
+          this.bassGain = null;
+        }
+        this.musicPlaying = false;
+        this.currentTrack = null;
+
+        // Restore music gain after fade
+        if (this.musicGainNode) {
+          this.musicGainNode.gain.cancelScheduledValues(
+            this.audioContext.currentTime
+          );
+          this.musicGainNode.gain.value = this.settings.isMuted
+            ? 0
+            : this.settings.musicVolume;
+        }
+      };
+
       if (fadeOutDuration > 0) {
         const currentTime = this.audioContext.currentTime;
         this.musicGainNode.gain.linearRampToValueAtTime(
           0,
           currentTime + fadeOutDuration
         );
-        setTimeout(() => {
-          if (this.currentMusicSource) {
-            this.currentMusicSource.stop();
-            this.currentMusicSource = null;
-          }
-          // Restore gain
-          this.musicGainNode.gain.value = this.settings.musicVolume;
-        }, fadeOutDuration * 1000);
+        setTimeout(cleanup, fadeOutDuration * 1000);
       } else {
-        this.currentMusicSource.stop();
-        this.currentMusicSource = null;
+        cleanup();
       }
     } catch (error) {
       console.error("Failed to stop music:", error);
@@ -175,7 +377,7 @@ export class AudioManager {
 
     if (category === "music") {
       this.settings.musicVolume = volume;
-      if (this.musicGainNode) {
+      if (this.musicGainNode && !this.settings.isMuted) {
         this.musicGainNode.gain.value = volume;
       }
     } else if (category === "sfx") {

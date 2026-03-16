@@ -128,9 +128,7 @@ window.addEventListener("DOMContentLoaded", () => {
       updateHud();
 
       // Start background music
-      // Note: We'll use a placeholder music file for now
-      // Real music files should be added to src/assets/audio/music/
-      // audioManager.playMusic("bgm_gameplay");
+      audioManager.playMusic("gameplay");
 
       // Start HUD update loop
       requestAnimationFrame(hudLoop);
