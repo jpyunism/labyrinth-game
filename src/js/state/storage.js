@@ -63,7 +63,7 @@ export class StorageManager {
    * @param {number} time
    * @param {number} stars
    */
-  updateLevelScore(levelId, time, stars) {
+  updateLevelScore(levelId, time, stars, moves) {
     const progress = this.loadProgress();
 
     // Ensure level entry exists
@@ -82,6 +82,11 @@ export class StorageManager {
     // Update time if better (lower is better) or if no time set yet
     if (levelData.bestTime === null || time < levelData.bestTime) {
       levelData.bestTime = time;
+    }
+
+    // Update moves if better (lower is better) or if no moves set yet
+    if (moves !== undefined && (levelData.bestMoves === null || moves < levelData.bestMoves)) {
+      levelData.bestMoves = moves;
     }
 
     this.saveProgress(progress);

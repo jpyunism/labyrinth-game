@@ -15,6 +15,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const gameHud = document.getElementById("game-hud");
   const levelDisplay = document.getElementById("level-display");
   const timerDisplay = document.getElementById("timer-display");
+  const movesDisplay = document.getElementById("moves-display");
   const backBtn = document.getElementById("back-btn");
 
   // Modals
@@ -42,7 +43,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     const game = new Game(canvas, {
       onWin: (data) => {
-        showVictory(data.stars, data.time);
+        showVictory(data.stars, data.time, data.moves, data.minMoves);
       },
       onLose: (data) => {
         showGameOver();
@@ -150,7 +151,7 @@ window.addEventListener("DOMContentLoaded", () => {
       gameOverModal.classList.add("hidden");
     }
 
-    function showVictory(stars, time) {
+    function showVictory(stars, time, moves, minMoves) {
       modalOverlay.classList.remove("hidden");
       victoryModal.classList.remove("hidden");
 
@@ -159,6 +160,9 @@ window.addEventListener("DOMContentLoaded", () => {
 
       const timeResult = victoryModal.querySelector(".time-result");
       timeResult.textContent = (time / 1000).toFixed(1) + "s";
+
+      const movesResult = victoryModal.querySelector(".moves-result");
+      movesResult.textContent = `${moves} / ${minMoves} min`;
     }
 
     function showGameOver() {
@@ -175,6 +179,9 @@ window.addEventListener("DOMContentLoaded", () => {
         const seconds = Math.floor(game.state.timer);
         const tenths = Math.floor((game.state.timer % 1) * 10);
         timerDisplay.textContent = `Time: ${seconds}.${tenths}`;
+
+        const minMoves = game.state.currentLevelData ? game.state.currentLevelData.minMoves : 0;
+        movesDisplay.textContent = `Moves: ${game.state.moves} / ${minMoves}`;
 
         requestAnimationFrame(hudLoop);
       }

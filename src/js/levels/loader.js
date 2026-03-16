@@ -13,7 +13,11 @@ export class LevelLoader {
    */
   static getLevel(levelId) {
     if (LEVELS && LEVELS[levelId]) {
-      return JSON.parse(JSON.stringify(LEVELS[levelId])); // Return deep copy
+      const level = JSON.parse(JSON.stringify(LEVELS[levelId])); // Return deep copy
+      if (level.minMoves === undefined) {
+        level.minMoves = this.calculateMinMoves(level);
+      }
+      return level;
     }
 
     if (levelId > 0 && levelId <= MAX_LEVELS) {
@@ -118,7 +122,7 @@ export class LevelLoader {
     // Calculate time limit based on size
     const timeLimit = Math.floor(width * height * 0.5);
 
-    return {
+    const level = {
       id: levelId,
       width: width,
       height: height,
@@ -130,5 +134,51 @@ export class LevelLoader {
         1: timeLimit,
       },
     };
+
+    level.minMoves = this.calculateMinMoves(level);
+    return level;
+  }
+
+  /**
+   * Calculates the minimum number of moves from start to goal using BFS.
+   * @param {Object} level - Level data with layout, width, height.
+   * @returns {number} Minimum moves, or -1 if no path exists.
+   */
+  static calculateMinMoves(level) {
+    const { layout, width, height } = level;
+    let startX = -1, startY = -1;
+    let goalX = -1, goalY = -1;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (layout[y][x] === 2) { startX = x; startY = y; }
+        if (layout[y][x] === 3) { goalX = x; goalY = y; }
+      }
+    }
+
+    if (startX < 0 || goalX < 0) return -1;
+
+    const visited = Array(height).fill(null).map(() => Array(width).fill(false));
+    const queue = [{ x: startX, y: startY, dist: 0 }];
+    visited[startY][startX] = true;
+
+    const dirs = [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }];
+
+    while (queue.length > 0) {
+      const { x, y, dist } = queue.shift();
+
+      if (x === goalX && y === goalY) return dist;
+
+      for (const { dx, dy } of dirs) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height && !visited[ny][nx] && layout[ny][nx] !== 1) {
+          visited[ny][nx] = true;
+          queue.push({ x: nx, y: ny, dist: dist + 1 });
+        }
+      }
+    }
+
+    return -1;
   }
 }

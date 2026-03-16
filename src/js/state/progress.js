@@ -18,6 +18,7 @@ export function createLevelProgress() {
   return {
     stars: 0,
     bestTime: null,
+    bestMoves: null,
     unlocked: false,
   };
 }

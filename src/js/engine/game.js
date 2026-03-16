@@ -27,6 +27,7 @@ export class Game {
       currentLevelId: null,
       status: "MENU", // MENU, PLAYING, PAUSED, VICTORY, GAMEOVER
       timer: 0,
+      moves: 0,
       player: { x: 0, y: 0 },
       currentLevelData: null,
     };
@@ -158,6 +159,7 @@ export class Game {
     this.state.currentLevelData = level;
     this.state.status = "PLAYING";
     this.state.timer = 0;
+    this.state.moves = 0;
     this._timerWarned = false;
     this.trail = [];
     this.lastDirection = null;
@@ -212,14 +214,17 @@ export class Game {
 
     this.lastDirection = direction;
     this.state.player = { x: newX, y: newY };
+    this.state.moves++;
     audioManager.playSfx("jump");
     this.checkWinCondition();
   }
 
-  calculateStars(timeTaken) {
-    const thresholds = this.state.currentLevelData.thresholds;
-    if (timeTaken <= thresholds[3]) return 3;
-    if (timeTaken <= thresholds[2]) return 2;
+  calculateStars() {
+    const minMoves = this.state.currentLevelData.minMoves;
+    const moves = this.state.moves;
+    if (minMoves <= 0) return 1;
+    if (moves <= minMoves) return 3;
+    if (moves <= Math.floor(minMoves * 1.5)) return 2;
     return 1;
   }
 
@@ -229,7 +234,7 @@ export class Game {
       this.state.status = "VICTORY";
       audioManager.playSfx("level_complete");
 
-      const stars = this.calculateStars(this.state.timer);
+      const stars = this.calculateStars();
       for (let i = 0; i < stars; i++) {
         setTimeout(() => audioManager.playSfx("star"), i * 200);
       }
@@ -237,7 +242,8 @@ export class Game {
       this.storage.updateLevelScore(
         this.state.currentLevelId,
         this.state.timer,
-        stars
+        stars,
+        this.state.moves
       );
 
       const nextLevelId = this.state.currentLevelId + 1;
@@ -249,6 +255,8 @@ export class Game {
         levelId: this.state.currentLevelId,
         time: this.state.timer * 1000,
         stars: stars,
+        moves: this.state.moves,
+        minMoves: this.state.currentLevelData.minMoves,
       });
     }
   }
