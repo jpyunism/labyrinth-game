@@ -2,7 +2,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Game } from "../src/js/engine/game.js";
 
 // Mock dependencies
-vi.mock("../src/js/engine/renderer.js", () => ({ Renderer: class {} }));
+vi.mock("../src/js/engine/renderer.js", () => ({
+  Renderer: class {
+    clear() {}
+    calculateLayout() {}
+    drawMaze() {}
+    drawPlayer() {}
+    drawTrail() {}
+    drawGoalGlow() {}
+    drawVignette() {}
+    shake() {}
+  },
+}));
 vi.mock("../src/js/state/storage.js", () => ({ StorageManager: class {} }));
 vi.mock("../src/js/engine/input.js", () => ({ InputHandler: class {} }));
 vi.mock("../src/js/engine/audio.js", () => ({
