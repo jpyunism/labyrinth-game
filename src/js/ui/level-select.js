@@ -1,3 +1,4 @@
+import { MAX_LEVELS } from "../levels/loader.js";
 import { StorageManager } from "../state/storage.js";
 
 export class LevelSelect {
@@ -15,7 +16,7 @@ export class LevelSelect {
     this.container.classList.remove("hidden");
 
     const progress = this.storage.loadProgress();
-    const totalLevels = 100;
+    const totalLevels = MAX_LEVELS;
 
     const title = document.createElement("h1");
     title.textContent = "Select Level";
@@ -46,6 +47,13 @@ export class LevelSelect {
         starsDiv.textContent = "★".repeat(levelData.stars);
       }
       btn.appendChild(starsDiv);
+
+      if (levelData.bestTime !== null && levelData.bestTime !== undefined) {
+        const timeDiv = document.createElement("div");
+        timeDiv.className = "best-time";
+        timeDiv.textContent = levelData.bestTime.toFixed(1) + "s";
+        btn.appendChild(timeDiv);
+      }
 
       grid.appendChild(btn);
     }

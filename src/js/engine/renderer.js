@@ -11,6 +11,7 @@ export class Renderer {
     this.cellSize = 0;
     this.offsetX = 0;
     this.offsetY = 0;
+    this.shakeOffset = { x: 0, y: 0 };
   }
 
   /**
@@ -48,11 +49,14 @@ export class Renderer {
   drawMaze(level) {
     if (!this.cellSize) return;
 
+    const sx = this.shakeOffset.x;
+    const sy = this.shakeOffset.y;
+
     for (let y = 0; y < level.height; y++) {
       for (let x = 0; x < level.width; x++) {
         const cellType = level.layout[y][x];
-        const px = this.offsetX + x * this.cellSize;
-        const py = this.offsetY + y * this.cellSize;
+        const px = this.offsetX + x * this.cellSize + sx;
+        const py = this.offsetY + y * this.cellSize + sy;
 
         // Draw Floor
         this.ctx.fillStyle = "#333";
@@ -99,8 +103,8 @@ export class Renderer {
   drawPlayer(player) {
     if (!this.cellSize) return;
 
-    const px = this.offsetX + player.x * this.cellSize;
-    const py = this.offsetY + player.y * this.cellSize;
+    const px = this.offsetX + player.x * this.cellSize + this.shakeOffset.x;
+    const py = this.offsetY + player.y * this.cellSize + this.shakeOffset.y;
 
     this.ctx.fillStyle = "#FFC107"; // Amber
     this.ctx.beginPath();
@@ -127,10 +131,23 @@ export class Renderer {
   }
 
   /**
-   * Draws UI overlays (timer, level info).
-   * @param {Object} gameState
+   * Triggers a brief screen shake effect.
+   * @param {number} duration - Duration in ms (default: 100)
+   * @param {number} intensity - Shake intensity in px (default: 3)
    */
-  drawUI(gameState) {
-    // To be implemented later
+  shake(duration = 100, intensity = 3) {
+    const start = performance.now();
+    const animate = (now) => {
+      const elapsed = now - start;
+      if (elapsed < duration) {
+        this.shakeOffset.x = (Math.random() - 0.5) * intensity * 2;
+        this.shakeOffset.y = (Math.random() - 0.5) * intensity * 2;
+        requestAnimationFrame(animate);
+      } else {
+        this.shakeOffset.x = 0;
+        this.shakeOffset.y = 0;
+      }
+    };
+    requestAnimationFrame(animate);
   }
 }

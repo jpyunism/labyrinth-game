@@ -30,7 +30,10 @@ export class StorageManager {
     try {
       const serialized = localStorage.getItem(this.storageKey);
       if (serialized) {
-        return JSON.parse(serialized);
+        const data = JSON.parse(serialized);
+        if (data && typeof data === "object" && typeof data.levels === "object") {
+          return data;
+        }
       }
     } catch (e) {
       console.error("Failed to load progress:", e);

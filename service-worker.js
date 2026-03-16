@@ -1,52 +1,40 @@
-const CACHE_NAME = "maze-game-v1";
-const ASSETS_TO_CACHE = [
-  "/",
-  "/index.html",
-  "/manifest.json",
-  "/src/css/styles.css",
-  "/src/js/main.js",
-  "/src/js/engine/game.js",
-  "/src/js/engine/input.js",
-  "/src/js/engine/renderer.js",
-  "/src/js/levels/data.js",
-  "/src/js/levels/loader.js",
-  "/src/js/state/progress.js",
-  "/src/js/state/storage.js",
-  "/src/js/ui/level-select.js",
-];
+const CACHE_NAME = "maze-game-v3";
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log("Opened cache");
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
-  );
-});
-
-self.addEventListener("fetch", (event) => {
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      // Cache hit - return response
-      if (response) {
-        return response;
-      }
-      return fetch(event.request);
-    })
-  );
+  // Skip waiting to activate immediately
+  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  const cacheWhitelist = [CACHE_NAME];
+  // Clean up old caches
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames
+          .filter((name) => name !== CACHE_NAME)
+          .map((name) => caches.delete(name))
+      )
+    )
+  );
+});
+
+// Network-first strategy: try network, fall back to cache
+self.addEventListener("fetch", (event) => {
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        // Cache successful responses for offline use
+        if (response.ok) {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
+        }
+        return response;
+      })
+      .catch(() => {
+        // Network failed, try cache
+        return caches.match(event.request);
+      })
   );
 });

@@ -1,6 +1,9 @@
 import "../css/styles.css";
+import { audioManager } from "./engine/audio.js";
 import { Game } from "./engine/game.js";
+import { MAX_LEVELS } from "./levels/loader.js";
 import { LevelSelect } from "./ui/level-select.js";
+import { SettingsUI } from "./ui/settings.js";
 
 console.log("Maze Game Levels initialized");
 
@@ -26,7 +29,14 @@ window.addEventListener("DOMContentLoaded", () => {
   const menuBtnFail = document.getElementById("menu-btn-fail");
 
   if (canvas) {
-    // Resize canvas
+    // Resize canvas to fill viewport
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      if (game && game.state.currentLevelData) {
+        game.renderer.calculateLayout(game.state.currentLevelData);
+      }
+    }
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
@@ -40,9 +50,54 @@ window.addEventListener("DOMContentLoaded", () => {
     });
     let currentLevelId = 1;
 
-    const levelSelect = new LevelSelect("level-select-screen", (levelId) => {
-      startGame(levelId);
+    let resizeTimeout;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(resizeCanvas, 150);
     });
+
+    // Audio unlock overlay
+    const audioUnlockOverlay = document.getElementById("audio-unlock-overlay");
+
+    const levelSelect = new LevelSelect(
+      "level-select-screen",
+      async (levelId) => {
+        // Initialize audio on first user interaction
+        if (!audioManager.initialized) {
+          await audioManager.init();
+
+          // Check if audio context is still suspended (autoplay policy)
+          if (
+            audioManager.audioContext &&
+            audioManager.audioContext.state === "suspended"
+          ) {
+            // Show unlock overlay
+            audioUnlockOverlay.classList.remove("hidden");
+
+            // Wait for user to click
+            await new Promise((resolve) => {
+              const clickHandler = async () => {
+                await audioManager.audioContext.resume();
+                audioUnlockOverlay.classList.add("hidden");
+                document.removeEventListener("click", clickHandler);
+                resolve();
+              };
+              document.addEventListener("click", clickHandler);
+            });
+          }
+
+          // Load saved settings after initialization
+          const settings = audioManager.getSettings();
+          audioManager.setVolume("music", settings.musicVolume);
+          audioManager.setVolume("sfx", settings.sfxVolume);
+          audioManager.setMuted(settings.isMuted);
+        }
+        startGame(levelId);
+      }
+    );
+
+    // Initialize settings UI
+    const settingsUI = new SettingsUI();
 
     // Initial render
     levelSelect.render();
@@ -52,8 +107,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     nextLevelBtn.addEventListener("click", () => {
       const nextLevel = currentLevelId + 1;
-      if (nextLevel <= 100) {
-        // Check max levels
+      if (nextLevel <= MAX_LEVELS) {
         startGame(nextLevel);
       } else {
         showLevelSelect();
@@ -73,6 +127,11 @@ window.addEventListener("DOMContentLoaded", () => {
       game.start();
       updateHud();
 
+      // Start background music
+      // Note: We'll use a placeholder music file for now
+      // Real music files should be added to src/assets/audio/music/
+      // audioManager.playMusic("bgm_gameplay");
+
       // Start HUD update loop
       requestAnimationFrame(hudLoop);
     }
@@ -82,6 +141,9 @@ window.addEventListener("DOMContentLoaded", () => {
       gameHud.classList.add("hidden");
       hideModals();
       levelSelect.render();
+
+      // Stop music when returning to menu
+      audioManager.stopMusic(0.5);
     }
 
     function hideModals() {
@@ -112,27 +174,13 @@ window.addEventListener("DOMContentLoaded", () => {
 
     function hudLoop() {
       if (game.state.status === "PLAYING") {
-        const elapsed = Date.now() - game.state.startTime;
-        const seconds = Math.floor(elapsed / 1000);
-        const ms = Math.floor((elapsed % 1000) / 100);
-        timerDisplay.textContent = `Time: ${seconds}.${ms}`;
+        const seconds = Math.floor(game.state.timer);
+        const tenths = Math.floor((game.state.timer % 1) * 10);
+        timerDisplay.textContent = `Time: ${seconds}.${tenths}`;
 
         requestAnimationFrame(hudLoop);
-      } else if (game.state.status === "WON") {
-        // Game just finished
-        // We need a way to detect the transition.
-        // Ideally Game class should emit events, but for now we can check status.
-        // However, this loop runs constantly. We should only show modal once.
       }
     }
 
-    // Hook into Game's checkWinCondition or add a callback
-    // Since we can't easily modify Game to emit events without changing it,
-    // let's modify Game to accept callbacks or check status in the game loop.
-    // Actually, Game.js has a loop. Let's see if we can override the onWin/onLose behavior
-    // or if we need to modify Game.js.
-
-    // Checking Game.js... it probably just sets status.
-    // Let's modify Game.js to accept callbacks for win/loss.
   }
 });

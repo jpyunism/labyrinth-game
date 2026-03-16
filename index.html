@@ -10,6 +10,12 @@
     <div id="app">
         <canvas id="game-canvas"></canvas>
         <div id="ui-layer">
+            <div id="audio-unlock-overlay" class="hidden">
+                <div class="unlock-prompt">
+                    <h2>🔊 Audio Ready</h2>
+                    <p>Click anywhere to enable game audio</p>
+                </div>
+            </div>
             <div id="level-select-screen"></div>
             <div id="game-hud" class="hidden">
                 <div id="game-ui">
@@ -17,6 +23,7 @@
                     <span id="timer-display">Time: 00:00</span>
                 </div>
                 <button id="back-btn">Back to Menu</button>
+                <button id="settings-btn">⚙️</button>
             </div>
             <div id="modal-overlay" class="hidden">
                 <div id="victory-modal" class="modal hidden">
@@ -31,6 +38,26 @@
                     <p>Try again!</p>
                     <button id="retry-btn">Retry</button>
                     <button id="menu-btn-fail">Menu</button>
+                </div>
+                <div id="settings-modal" class="modal hidden">
+                    <h2>Audio Settings</h2>
+                    <div class="settings-content">
+                        <div class="setting-row">
+                            <label for="music-volume">Music Volume</label>
+                            <input type="range" id="music-volume" min="0" max="100" value="50" />
+                            <span id="music-volume-value">50%</span>
+                        </div>
+                        <div class="setting-row">
+                            <label for="sfx-volume">SFX Volume</label>
+                            <input type="range" id="sfx-volume" min="0" max="100" value="80" />
+                            <span id="sfx-volume-value">80%</span>
+                        </div>
+                        <div class="setting-row">
+                            <label for="mute-toggle">Mute All</label>
+                            <input type="checkbox" id="mute-toggle" />
+                        </div>
+                    </div>
+                    <button id="settings-close-btn">Close</button>
                 </div>
             </div>
         </div>

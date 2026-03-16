@@ -5,6 +5,12 @@ import { Game } from "../src/js/engine/game.js";
 vi.mock("../src/js/engine/renderer.js", () => ({ Renderer: class {} }));
 vi.mock("../src/js/state/storage.js", () => ({ StorageManager: class {} }));
 vi.mock("../src/js/engine/input.js", () => ({ InputHandler: class {} }));
+vi.mock("../src/js/engine/audio.js", () => ({
+  audioManager: { registerSfxDefinitions() {}, playSfx() {} },
+}));
+vi.mock("../src/assets/audio/sfx-definitions.js", () => ({
+  SFX_DEFINITIONS: {},
+}));
 
 describe("Scoring System", () => {
   let game;

@@ -11,6 +11,7 @@ vi.mock("../src/js/engine/renderer.js", () => {
       drawMaze() {}
       drawPlayer() {}
       drawUI() {}
+      shake() {}
     },
   };
 });
@@ -34,8 +35,27 @@ vi.mock("../src/js/engine/input.js", () => {
   return {
     InputHandler: class {
       constructor(cb) {}
+      destroy() {}
     },
   };
+});
+
+// Mock audio to avoid AudioContext in test env
+vi.mock("../src/js/engine/audio.js", () => {
+  return {
+    audioManager: {
+      registerSfxDefinitions() {},
+      playSfx() {},
+      playMusic() {},
+      stopMusic() {},
+      init() {},
+    },
+  };
+});
+
+// Mock SFX definitions
+vi.mock("../src/assets/audio/sfx-definitions.js", () => {
+  return { SFX_DEFINITIONS: {} };
 });
 
 describe("Game Engine", () => {

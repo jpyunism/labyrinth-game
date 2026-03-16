@@ -1,5 +1,7 @@
-import { LevelLoader } from "../levels/loader.js";
+import { SFX_DEFINITIONS } from "../../assets/audio/sfx-definitions.js";
+import { LevelLoader, MAX_LEVELS } from "../levels/loader.js";
 import { StorageManager } from "../state/storage.js";
+import { audioManager } from "./audio.js";
 import { InputHandler } from "./input.js";
 import { Renderer } from "./renderer.js";
 
@@ -12,11 +14,14 @@ export class Game {
     this.canvas = canvas;
     this.renderer = new Renderer(canvas);
     this.storage = new StorageManager();
-    this.input = new InputHandler((dir) => this.movePlayer(dir));
+    this.input = new InputHandler((dir) => this.movePlayer(dir), canvas);
     this.callbacks = {
       onWin: callbacks.onWin || (() => {}),
       onLose: callbacks.onLose || (() => {}),
     };
+
+    // Register SFX definitions with audio manager
+    audioManager.registerSfxDefinitions(SFX_DEFINITIONS);
 
     this.state = {
       currentLevelId: null,
@@ -24,25 +29,27 @@ export class Game {
       timer: 0,
       player: { x: 0, y: 0 },
       currentLevelData: null,
-      startTime: 0,
     };
+
+    // Smooth movement interpolation
+    this.displayPlayer = { x: 0, y: 0 };
+    this.lastDirection = null;
+    this.moveSpeed = 12; // cells per second for lerp
+
+    // Trail system
+    this.trail = []; // { x, y, alpha }
+    this.trailTimer = 0;
 
     this.lastTime = 0;
     this.animationFrameId = null;
+    this._timerWarned = false;
   }
 
-  /**
-   * Starts the game loop.
-   */
   start() {
-    this.state.startTime = Date.now();
     this.lastTime = performance.now();
     this.loop(this.lastTime);
   }
 
-  /**
-   * Stops the game loop.
-   */
   stop() {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
@@ -52,7 +59,6 @@ export class Game {
 
   /**
    * Main game loop.
-   * @param {number} timestamp
    */
   loop(timestamp) {
     if (this.state.status !== "PLAYING") return;
@@ -67,32 +73,83 @@ export class Game {
   }
 
   /**
-   * Updates game logic.
-   * @param {number} dt - Delta time in seconds.
+   * Updates game logic and interpolation.
    */
   update(dt) {
     if (this.state.status === "PLAYING") {
       this.checkTimeLimit(dt);
+      this.updateDisplayPlayer(dt);
+      this.updateTrail(dt);
     }
   }
 
   /**
-   * Renders the game.
+   * Lerp displayPlayer toward logical player position.
    */
+  updateDisplayPlayer(dt) {
+    const tx = this.state.player.x;
+    const ty = this.state.player.y;
+    const speed = this.moveSpeed * dt;
+
+    const dx = tx - this.displayPlayer.x;
+    const dy = ty - this.displayPlayer.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < 0.01) {
+      this.displayPlayer.x = tx;
+      this.displayPlayer.y = ty;
+    } else if (dist > 2) {
+      // Snap if too far (e.g. level load)
+      this.displayPlayer.x = tx;
+      this.displayPlayer.y = ty;
+    } else {
+      this.displayPlayer.x += dx * Math.min(speed / dist * 3, 1);
+      this.displayPlayer.y += dy * Math.min(speed / dist * 3, 1);
+    }
+  }
+
+  /**
+   * Update trail particles — emit from display position and fade existing.
+   */
+  updateTrail(dt) {
+    this.trailTimer += dt;
+
+    // Emit trail particle every ~30ms while moving
+    const dx = this.state.player.x - this.displayPlayer.x;
+    const dy = this.state.player.y - this.displayPlayer.y;
+    const moving = Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05;
+
+    if (moving && this.trailTimer > 0.03) {
+      this.trail.push({
+        x: this.displayPlayer.x,
+        y: this.displayPlayer.y,
+        alpha: 0.6,
+      });
+      this.trailTimer = 0;
+    }
+
+    // Fade and remove old particles
+    for (let i = this.trail.length - 1; i >= 0; i--) {
+      this.trail[i].alpha -= dt * 2.5;
+      if (this.trail[i].alpha <= 0) {
+        this.trail.splice(i, 1);
+      }
+    }
+  }
+
   render() {
     this.renderer.clear();
 
     if (this.state.status === "PLAYING" && this.state.currentLevelData) {
-      this.renderer.drawMaze(this.state.currentLevelData);
-      this.renderer.drawPlayer(this.state.player);
-      this.renderer.drawUI(this.state);
+      const timeRatio = this.state.timer / this.state.currentLevelData.timeLimit;
+      this.renderer.drawMaze(this.state.currentLevelData, timeRatio);
+      this.renderer.drawTrail(this.trail);
+      this.renderer.drawPlayer(this.displayPlayer, this.lastDirection, this.state.player);
+      this.renderer.drawGoalGlow(this.state.currentLevelData);
+      this.renderer.drawVignette(timeRatio);
     }
   }
 
-  /**
-   * Loads and starts a specific level.
-   * @param {number} levelId
-   */
   loadLevel(levelId) {
     const level = LevelLoader.getLevel(levelId);
     if (!level) return;
@@ -101,13 +158,16 @@ export class Game {
     this.state.currentLevelData = level;
     this.state.status = "PLAYING";
     this.state.timer = 0;
+    this._timerWarned = false;
+    this.trail = [];
+    this.lastDirection = null;
 
     // Find start position
     for (let y = 0; y < level.height; y++) {
       for (let x = 0; x < level.width; x++) {
         if (level.layout[y][x] === 2) {
-          // 2 is Start
           this.state.player = { x, y };
+          this.displayPlayer = { x, y };
           break;
         }
       }
@@ -116,59 +176,46 @@ export class Game {
     this.renderer.calculateLayout(level);
   }
 
-  /**
-   * Handles player movement.
-   * @param {string} direction - 'UP', 'DOWN', 'LEFT', 'RIGHT'
-   */
   movePlayer(direction) {
     if (this.state.status !== "PLAYING") return;
+
+    // Block input while still animating a previous move
+    const dx = Math.abs(this.state.player.x - this.displayPlayer.x);
+    const dy = Math.abs(this.state.player.y - this.displayPlayer.y);
+    if (dx > 0.3 || dy > 0.3) return;
 
     const { x, y } = this.state.player;
     let newX = x;
     let newY = y;
 
     switch (direction) {
-      case "UP":
-        newY--;
-        break;
-      case "DOWN":
-        newY++;
-        break;
-      case "LEFT":
-        newX--;
-        break;
-      case "RIGHT":
-        newX++;
-        break;
+      case "UP":    newY--; break;
+      case "DOWN":  newY++; break;
+      case "LEFT":  newX--; break;
+      case "RIGHT": newX++; break;
     }
 
     // Check bounds
     if (
-      newX < 0 ||
-      newX >= this.state.currentLevelData.width ||
-      newY < 0 ||
-      newY >= this.state.currentLevelData.height
+      newX < 0 || newX >= this.state.currentLevelData.width ||
+      newY < 0 || newY >= this.state.currentLevelData.height
     ) {
       return;
     }
 
     // Check collision (1 is Wall)
     if (this.state.currentLevelData.layout[newY][newX] === 1) {
+      audioManager.playSfx("hit_wall");
+      this.renderer.shake();
       return;
     }
 
-    // Move player
+    this.lastDirection = direction;
     this.state.player = { x: newX, y: newY };
-
-    // Check win
+    audioManager.playSfx("jump");
     this.checkWinCondition();
   }
 
-  /**
-   * Calculates stars based on time taken.
-   * @param {number} timeTaken
-   * @returns {number} Stars (1-3)
-   */
   calculateStars(timeTaken) {
     const thresholds = this.state.currentLevelData.thresholds;
     if (timeTaken <= thresholds[3]) return 3;
@@ -178,30 +225,29 @@ export class Game {
 
   checkWinCondition() {
     const { x, y } = this.state.player;
-    // 3 is Goal
     if (this.state.currentLevelData.layout[y][x] === 3) {
       this.state.status = "VICTORY";
-      console.log("Victory!");
+      audioManager.playSfx("level_complete");
 
       const stars = this.calculateStars(this.state.timer);
+      for (let i = 0; i < stars; i++) {
+        setTimeout(() => audioManager.playSfx("star"), i * 200);
+      }
 
-      // Save progress
       this.storage.updateLevelScore(
         this.state.currentLevelId,
         this.state.timer,
         stars
       );
 
-      // Unlock next level
       const nextLevelId = this.state.currentLevelId + 1;
-      if (nextLevelId <= 100) {
-        // Assuming 100 levels
+      if (nextLevelId <= MAX_LEVELS) {
         this.storage.unlockLevel(nextLevelId);
       }
 
       this.callbacks.onWin({
         levelId: this.state.currentLevelId,
-        time: this.state.timer * 1000, // Convert back to ms for display consistency if needed
+        time: this.state.timer * 1000,
         stars: stars,
       });
     }
@@ -209,12 +255,18 @@ export class Game {
 
   checkTimeLimit(dt) {
     this.state.timer += dt;
-    if (this.state.timer >= this.state.currentLevelData.timeLimit) {
+    const timeLimit = this.state.currentLevelData.timeLimit;
+    const remaining = timeLimit - this.state.timer;
+
+    if (!this._timerWarned && remaining <= timeLimit * 0.25 && remaining > 0) {
+      audioManager.playSfx("timer_warning");
+      this._timerWarned = true;
+    }
+
+    if (this.state.timer >= timeLimit) {
       this.state.status = "GAMEOVER";
-      console.log("Game Over - Time Limit Exceeded");
-      this.callbacks.onLose({
-        reason: "Time Limit Exceeded",
-      });
+      audioManager.playSfx("game_over");
+      this.callbacks.onLose({ reason: "Time Limit Exceeded" });
     }
   }
 }

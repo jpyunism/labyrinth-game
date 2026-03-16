@@ -1,5 +1,7 @@
 import { LEVELS } from "./data.js";
 
+export const MAX_LEVELS = 200;
+
 /**
  * Utility to load level data.
  */
@@ -14,7 +16,7 @@ export class LevelLoader {
       return JSON.parse(JSON.stringify(LEVELS[levelId])); // Return deep copy
     }
 
-    if (levelId > 0 && levelId <= 100) {
+    if (levelId > 0 && levelId <= MAX_LEVELS) {
       return this.generateProceduralLevel(levelId);
     }
 
@@ -27,7 +29,7 @@ export class LevelLoader {
    * @returns {number}
    */
   static getTotalLevels() {
-    return 100; // Fixed at 100 as per spec
+    return MAX_LEVELS;
   }
 
   /**
@@ -37,8 +39,8 @@ export class LevelLoader {
    */
   static generateProceduralLevel(levelId) {
     // Increase size and complexity with level ID
-    const width = Math.min(20, 5 + Math.floor(levelId / 5));
-    const height = Math.min(20, 5 + Math.floor(levelId / 5));
+    const width = Math.min(30, 10 + Math.floor(levelId / 5));
+    const height = Math.min(30, 10 + Math.floor(levelId / 5));
 
     // Initialize grid with walls (1)
     const layout = Array(height)
@@ -64,8 +66,12 @@ export class LevelLoader {
       const current = stack[stack.length - 1];
       const { x, y } = current;
 
-      // Shuffle directions
-      const shuffledDirs = directions.sort(() => Math.random() - 0.5);
+      // Fisher-Yates shuffle (unbiased, does not mutate original)
+      const shuffledDirs = [...directions];
+      for (let i = shuffledDirs.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledDirs[i], shuffledDirs[j]] = [shuffledDirs[j], shuffledDirs[i]];
+      }
       let moved = false;
 
       for (const dir of shuffledDirs) {
@@ -118,7 +124,11 @@ export class LevelLoader {
       height: height,
       layout: layout,
       timeLimit: timeLimit,
-      thresholds: [0, timeLimit * 0.3, timeLimit * 0.6, timeLimit], // 3 stars, 2 stars, 1 star
+      thresholds: {
+        3: Math.floor(timeLimit * 0.3),
+        2: Math.floor(timeLimit * 0.6),
+        1: timeLimit,
+      },
     };
   }
 }
